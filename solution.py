@@ -1,6 +1,8 @@
 """Solution."""
 import numpy as np
 from scipy.optimize import fmin_l_bfgs_b
+from sklearn.gaussian_process import GaussianProcessRegressor
+from sklearn.gaussian_process.kernels import Matern, RBF, WhiteKernel, ConstantKernel
 # import additional ...
 
 
@@ -14,8 +16,32 @@ SAFETY_THRESHOLD = 4  # threshold, upper bound of SA
 class BOAlgorithm():
     def __init__(self):
         """Initializes the algorithm with a parameter configuration."""
+        self.results = []
+
         # TODO: Define all relevant class members for your BO algorithm here.
-        pass
+        # Have added these are the standard deviations of the noise for f and v
+        self.sd_f = 0.15
+        self.sd_v = 0.0001
+
+        # for max improvement 
+        self.opt_f = 0
+
+    def f(self, x):
+        # may need to tune lengthscale
+        kernel_f = Matern(nu=2.5) + WhiteKernel(0.5)
+        # may need to tune alpha
+        f_gp = kernel_f.__call__(x)
+        return f_gp
+        
+    def v(self, x):
+        # no idea how this gets called and where to add in sd_v
+        # lengthscale can be 10, 1, or 0.5 
+        kernel_v = RBF(length_scale=10) + WhiteKernel(np.sqrt(2)) + ConstantKernel(4)
+        # may need to tune alpha
+        # this just uses the kernel to compute covariance
+        v_gp = kernel_v.__call__(x)
+        return v_gp
+    
 
     def recommend_next(self):
         """
@@ -26,10 +52,17 @@ class BOAlgorithm():
         recommendation: float
             the next point to evaluate
         """
+        
+
         # TODO: Implement the function which recommends the next point to query
         # using functions f and v.
         # In implementing this function, you may use
         # optimize_acquisition_function() defined below.
+
+        recommendation = self.optimize_acquisition_function()
+
+
+        return recommendation
 
         raise NotImplementedError
 
@@ -78,8 +111,18 @@ class BOAlgorithm():
             Value of the acquisition function at x
         """
         x = np.atleast_2d(x)
+
+        # using equation in task
+        prop_f = self.f(x) + np.random.normal(0,self.sd_f)
+
+        # aqcuisition function is expectation but i implemented wrong idk
+        af_value = prop_f-self.opt_f 
+
+        zeroes = np.zeros_like(x)
+        return np.maximum(zeroes, af_value).item()
+
         # TODO: Implement the acquisition function you want to optimize.
-        raise NotImplementedError
+        #raise NotImplementedError
 
     def add_observation(self, x: float, f: float, v: float):
         """
@@ -94,8 +137,12 @@ class BOAlgorithm():
         v: float
             SA constraint func
         """
+
+        self.results.append([x,f,v])
+        self.opt_f = f
+        
         # TODO: Add the observed data {x, f, v} to your model.
-        raise NotImplementedError
+        #raise NotImplementedError
 
     def get_optimal_solution(self):
         """
@@ -107,7 +154,16 @@ class BOAlgorithm():
             the optimal solution of the problem
         """
         # TODO: Return your predicted safe optimum of f.
-        raise NotImplementedError
+        best_f = 0
+        best_x = 0
+        for i in range(len(self.results)):
+            xi, fi, vi = self.results[i]
+            if fi > best_f and vi < SAFETY_THRESHOLD:
+                best_x = xi
+                best_f = fi
+
+        return best_x
+        
 
     def plot(self, plot_recommendation: bool = True):
         """Plot objective and constraint posterior for debugging (OPTIONAL).
