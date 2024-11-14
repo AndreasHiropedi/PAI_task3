@@ -2,6 +2,9 @@
 import numpy as np
 from scipy.optimize import fmin_l_bfgs_b
 # import additional ...
+from sklearn.gaussian_process import GaussianProcessRegressor
+from sklearn.gaussian_process.kernels import Matern, ConstantKernel, WhiteKernel, DotProduct
+from scipy.stats import norm
 
 
 # global variables
@@ -15,7 +18,28 @@ class BOAlgorithm():
     def __init__(self):
         """Initializes the algorithm with a parameter configuration."""
         # TODO: Define all relevant class members for your BO algorithm here.
-        pass
+
+        # Kernel for f: Matern with recommended parameters
+        kernel_f = ConstantKernel(1.0) * Matern(length_scale=1.0, nu=2.5) + WhiteKernel(noise_level=0.15)
+
+        # Kernel for v: Combination of Linear + Matern
+        kernel_v = (ConstantKernel(1.0) * DotProduct() + Matern(length_scale=1.0, nu=2.5) + WhiteKernel(noise_level=0.0001))
+        
+        # Initialize Gaussian Process models
+        self.gp_f = GaussianProcessRegressor(kernel=kernel_f, alpha=0.15**2)  # Observational noise for f
+        self.gp_v = GaussianProcessRegressor(kernel=kernel_v, alpha=0.0001**2)  # Observational noise for v
+        
+        # Observations
+        self.observations_x = []
+        self.observations_f = []
+        self.observations_v = []
+
+        # Iteration tracking
+        self.iteration = 0
+        self.total_iterations = 100
+
+        # Penalty for constraint violation
+        self.lambda_penalty = 5.0
 
     def recommend_next(self):
         """
@@ -31,7 +55,13 @@ class BOAlgorithm():
         # In implementing this function, you may use
         # optimize_acquisition_function() defined below.
 
-        raise NotImplementedError
+        # Find the point that maximizes the acquisition function
+        next_point = self.optimize_acquisition_function()
+        
+        # Update iteration count for adaptive kappa
+        self.iteration += 1
+        
+        return next_point
 
     def optimize_acquisition_function(self):
         """Optimizes the acquisition function defined below (DO NOT MODIFY).
@@ -78,8 +108,32 @@ class BOAlgorithm():
             Value of the acquisition function at x
         """
         x = np.atleast_2d(x)
-        # TODO: Implement the acquisition function you want to optimize.
-        raise NotImplementedError
+        
+        # Predict mean and standard deviation for f and v
+        mean_f, std_f = self.gp_f.predict(x, return_std=True)
+        mean_v, std_v = self.gp_v.predict(x, return_std=True)
+        
+        # Maximum tolerated SA value
+        constraint_threshold = 4.0
+        
+        # Calculate kappa with slower linear decay
+        kappa = 2.0 * max(1 - self.iteration / self.total_iterations, 0.1)
+        
+        # UCB Component (for minimization)
+        ucb = mean_f - kappa * std_f
+        
+        # Lagrangian penalty for constraint violation
+        constraint_violation = np.maximum(mean_v - constraint_threshold, 0)
+        penalty_term = self.lambda_penalty * constraint_violation
+        
+        # Adjusted acquisition function with penalty
+        acquisition_value = ucb - penalty_term
+        
+        # Probability of satisfying the constraint (for further safe exploration)
+        prob_constraint = norm.cdf((constraint_threshold - mean_v) / std_v)
+        
+        # Combine acquisition with constraint probability
+        return (acquisition_value * prob_constraint).flatten()
 
     def add_observation(self, x: float, f: float, v: float):
         """
@@ -94,8 +148,18 @@ class BOAlgorithm():
         v: float
             SA constraint func
         """
-        # TODO: Add the observed data {x, f, v} to your model.
-        raise NotImplementedError
+        # Append new observations
+        self.observations_x.append(x)
+        self.observations_f.append(f)
+        self.observations_v.append(v)
+        
+        # Update Gaussian Processes with new observations
+        X = np.array(self.observations_x).reshape(-1, 1)
+        F = np.array(self.observations_f).reshape(-1, 1)
+        V = np.array(self.observations_v).reshape(-1, 1)
+        
+        self.gp_f.fit(X, F)
+        self.gp_v.fit(X, V)
 
     def get_optimal_solution(self):
         """
@@ -106,8 +170,20 @@ class BOAlgorithm():
         solution: float
             the optimal solution of the problem
         """
-        # TODO: Return your predicted safe optimum of f.
-        raise NotImplementedError
+
+        if not self.observations_x:
+        # Return a default value within the domain if there are no observations
+            return 0.0
+
+        max_f = -np.inf
+        optimal_x = None
+        for x, f, v in zip(self.observations_x, self.observations_f, self.observations_v):
+            if v <= 0 and f > max_f:  # Assuming v <= 0 is the constraint
+                max_f = f
+                optimal_x = x
+
+        # Return optimal_x if found, otherwise a default value
+        return optimal_x if optimal_x is not None else 0.0
 
     def plot(self, plot_recommendation: bool = True):
         """Plot objective and constraint posterior for debugging (OPTIONAL).
