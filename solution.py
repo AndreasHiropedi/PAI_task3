@@ -3,7 +3,7 @@ import numpy as np
 from scipy.optimize import fmin_l_bfgs_b
 # import additional ...
 from sklearn.gaussian_process import GaussianProcessRegressor
-from sklearn.gaussian_process.kernels import Matern, ConstantKernel, WhiteKernel, DotProduct
+from sklearn.gaussian_process.kernels import Matern, ConstantKernel, WhiteKernel, DotProduct, RBF
 from scipy.stats import norm
 
 
@@ -20,13 +20,13 @@ class BOAlgorithm():
         # TODO: Define all relevant class members for your BO algorithm here.
 
         # Kernel for f: Matern with recommended parameters
-        kernel_f = ConstantKernel(1.0) * Matern(length_scale=1.0, nu=2.5) + WhiteKernel(noise_level=0.15)
+        kernel_f = ConstantKernel(1.0) * Matern(length_scale=10.0, nu=2.5) +WhiteKernel(noise_level=0.15) + RBF(length_scale=1.0)
 
         # Kernel for v: Combination of Linear + Matern
-        kernel_v = (ConstantKernel(1.0) * DotProduct() + Matern(length_scale=1.0, nu=2.5) + WhiteKernel(noise_level=0.0001))
+        kernel_v = (ConstantKernel(1.0) * DotProduct() + Matern(length_scale=10.0, nu=2.5) + WhiteKernel(noise_level=0.0001)) + RBF(length_scale=1.0)
         
         # Initialize Gaussian Process models
-        self.gp_f = GaussianProcessRegressor(kernel=kernel_f, alpha=0.15**2)  # Observational noise for f
+        self.gp_f = GaussianProcessRegressor(kernel=kernel_f, alpha=0.015**2)  # Observational noise for f
         self.gp_v = GaussianProcessRegressor(kernel=kernel_v, alpha=0.0001**2)  # Observational noise for v
         
         # Observations
@@ -39,7 +39,7 @@ class BOAlgorithm():
         self.total_iterations = 100
 
         # Penalty for constraint violation
-        self.lambda_penalty = 5.0
+        self.lambda_penalty = 10.0
 
     def recommend_next(self):
         """
