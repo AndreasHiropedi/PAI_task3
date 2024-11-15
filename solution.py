@@ -3,9 +3,11 @@ import numpy as np
 from scipy.optimize import fmin_l_bfgs_b
 # import additional ...
 from sklearn.gaussian_process import GaussianProcessRegressor
-from sklearn.gaussian_process.kernels import Matern, ConstantKernel, WhiteKernel, DotProduct
+from sklearn.gaussian_process.kernels import Matern, ConstantKernel, WhiteKernel, DotProduct, RBF
 from scipy.stats import norm
 
+# Set a fixed seed for reproducibility
+np.random.seed(42)
 
 # global variables
 DOMAIN = np.array([[0, 10]])  # restrict \theta in [0, 10]
@@ -19,14 +21,14 @@ class BOAlgorithm():
         """Initializes the algorithm with a parameter configuration."""
         # TODO: Define all relevant class members for your BO algorithm here.
 
-        # Kernel for f: Matern with recommended parameters
-        kernel_f = ConstantKernel(1.0) * Matern(length_scale=1.0, nu=2.5) + WhiteKernel(noise_level=0.15)
+        # Kernel for f: Matern and RBF combination with recommended parameters
+        kernel_f = ConstantKernel(1.0) * RBF(length_scale=10.0) + WhiteKernel(noise_level=0.15) + Matern(length_scale=1.0, nu=1.5)
 
-        # Kernel for v: Combination of Linear + Matern
-        kernel_v = (ConstantKernel(1.0) * DotProduct() + Matern(length_scale=1.0, nu=2.5) + WhiteKernel(noise_level=0.0001))
+        # Kernel for v: Combination of Linear + Matern + RBF
+        kernel_v = (ConstantKernel(1.0) * DotProduct() + Matern(length_scale=10.0, nu=1.5) + WhiteKernel(noise_level=0.0001)) + RBF(length_scale=10.0)
         
         # Initialize Gaussian Process models
-        self.gp_f = GaussianProcessRegressor(kernel=kernel_f, alpha=0.15**2)  # Observational noise for f
+        self.gp_f = GaussianProcessRegressor(kernel=kernel_f, alpha=0.015**2)  # Observational noise for f
         self.gp_v = GaussianProcessRegressor(kernel=kernel_v, alpha=0.0001**2)  # Observational noise for v
         
         # Observations
@@ -39,7 +41,7 @@ class BOAlgorithm():
         self.total_iterations = 100
 
         # Penalty for constraint violation
-        self.lambda_penalty = 5.0
+        self.lambda_penalty = 10.0
 
     def recommend_next(self):
         """
@@ -178,7 +180,7 @@ class BOAlgorithm():
         max_f = -np.inf
         optimal_x = None
         for x, f, v in zip(self.observations_x, self.observations_f, self.observations_v):
-            if v <= 0 and f > max_f:  # Assuming v <= 0 is the constraint
+            if v <= 0 and f > max_f: 
                 max_f = f
                 optimal_x = x
 
