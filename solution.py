@@ -21,25 +21,27 @@ class BOAlgorithm():
         """Initializes the algorithm with a parameter configuration."""
         # TODO: Define all relevant class members for your BO algorithm here.
 
-        # Kernel for f: Matern and RBF combination with recommended parameters
-        kernel_f = ConstantKernel(1.0) * RBF(length_scale=10.0) + WhiteKernel(noise_level=0.15) + Matern(length_scale=1.0, nu=1.5)
-
-        # Kernel for v: Combination of Linear + Matern + RBF
-        kernel_v = (ConstantKernel(1.0) * DotProduct() + Matern(length_scale=10.0, nu=1.5) + WhiteKernel(noise_level=0.0001)) + RBF(length_scale=10.0)
+        # Kernel for f
+        kernel_f = ConstantKernel(1.0) * RBF(length_scale=10.0) + WhiteKernel(noise_level=0.15) + Matern(length_scale=1.0, nu=2.5)
         
-        # Initialize Gaussian Process models
-        self.gp_f = GaussianProcessRegressor(kernel=kernel_f, alpha=0.015**2)  # Observational noise for f
-        self.gp_v = GaussianProcessRegressor(kernel=kernel_v, alpha=0.0001**2)  # Observational noise for v
+        # Kernel for v
+        kernel_v = (ConstantKernel(1.0) * DotProduct() + Matern(length_scale=1.0, nu=2.5) + WhiteKernel(noise_level=0.0001)) + RBF(length_scale=10.0)
+        
+        # Initialize Gaussian Processes
+        sigma_f = 0.015
+        sigma_v = 0.0001
+        self.gp_f = GaussianProcessRegressor(kernel=kernel_f, alpha=sigma_f**2, normalize_y=True)
+        self.gp_v = GaussianProcessRegressor(kernel=kernel_v, alpha=sigma_v**2, normalize_y=True)
         
         # Observations
         self.observations_x = []
         self.observations_f = []
         self.observations_v = []
-
+        
         # Iteration tracking
         self.iteration = 0
         self.total_iterations = 100
-
+        
         # Penalty for constraint violation
         self.lambda_penalty = 10.0
 
