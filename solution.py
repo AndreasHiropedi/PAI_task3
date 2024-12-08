@@ -36,7 +36,7 @@ class BOAlgorithm():
     def v(self, x):
         # no idea how this gets called and where to add in sd_v
         # lengthscale can be 10, 1, or 0.5 
-        kernel_v = RBF(length_scale=10) + WhiteKernel(np.sqrt(2)) + ConstantKernel(4)
+        kernel_v = RBF(length_scale=1) + WhiteKernel(np.sqrt(2)) + ConstantKernel(4)
         # may need to tune alpha
         # this just uses the kernel to compute covariance
         v_gp = kernel_v.__call__(x)
